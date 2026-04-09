@@ -1,24 +1,9 @@
-//
-//  ContentView.swift
-//  poop
-//
-//  Created by Vaibhav on 10/04/26.
-//
 
+// ContentView.swift
+// Unused — Poop is a menu-bar-only app with no windows.
+// Kept as an empty placeholder to avoid removing from the project.
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
-
-#Preview {
-    ContentView()
+    var body: some View { EmptyView() }
 }
