@@ -1,6 +1,7 @@
 
 import SwiftUI
 import AppKit
+import ServiceManagement
 
 struct SettingsView: View {
     // Provider + derived URL storage
@@ -24,6 +25,8 @@ struct SettingsView: View {
     @State private var isRecordingHotkey   = false
     @State private var accessibilityGranted = false
     @State private var showAPIKey           = false
+    @State private var startAtLogin         = (SMAppService.mainApp.status == .enabled)
+    @State private var loginItemError: String? = nil
 
     private var selectedProvider: LLMProvider {
         LLMProvider(rawValue: selectedProviderRaw) ?? .openRouter
@@ -36,11 +39,12 @@ struct SettingsView: View {
             apiSection
             shortcutSection
             indicatorSection
+            launchSection
             systemPromptSection
             permissionsSection
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 740)
+        .frame(width: 540, height: 800)
         .onAppear { refreshAccessibility() }
     }
 
@@ -195,6 +199,29 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Launch Section
+
+    private var launchSection: some View {
+        Section {
+            Toggle(isOn: $startAtLogin) {
+                Label("Start at Login", systemImage: "power")
+            }
+            .onChange(of: startAtLogin) { _, enabled in
+                applyLoginItem(enabled)
+            }
+
+            if let err = loginItemError {
+                Text(err)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .transition(.opacity)
+            }
+        } header: {
+            Text("Launch")
+        }
+        .animation(.easeInOut(duration: 0.2), value: loginItemError)
+    }
+
     // MARK: - System Prompt Section
 
     private var systemPromptSection: some View {
@@ -243,6 +270,21 @@ struct SettingsView: View {
     }
 
     // MARK: - Helpers
+
+    private func applyLoginItem(_ enable: Bool) {
+        do {
+            if enable {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            loginItemError = nil
+        } catch {
+            // Roll the toggle back on failure
+            startAtLogin = !enable
+            loginItemError = "Could not \(enable ? "enable" : "disable") start at login: \(error.localizedDescription)"
+        }
+    }
 
     private func fieldLabel(_ title: String, icon: String) -> some View {
         Label(title, systemImage: icon)
