@@ -115,8 +115,16 @@ class SettingsManager {
     private func migrateSystemPromptIfNeeded() {
         let stored = defaults.string(forKey: "systemPrompt") ?? ""
         let version = defaults.integer(forKey: "systemPromptVersion")
-        if stored.isEmpty || version < Self.currentPromptVersion {
+        if stored.isEmpty {
             defaults.set(Self.defaultSystemPrompt, forKey: "systemPrompt")
+            defaults.set(Self.currentPromptVersion, forKey: "systemPromptVersion")
+            return
+        }
+
+        if version < Self.currentPromptVersion {
+            if stored == Self.previousDefaultSystemPrompt {
+                defaults.set(Self.defaultSystemPrompt, forKey: "systemPrompt")
+            }
             defaults.set(Self.currentPromptVersion, forKey: "systemPromptVersion")
         }
     }
@@ -175,7 +183,23 @@ class SettingsManager {
     }
 
     // Bump this whenever the default prompt changes so existing installs auto-update
-    static let currentPromptVersion = 2
+    static let currentPromptVersion = 3
+
+    static let previousDefaultSystemPrompt = """
+You are a grammar and style corrector. Your ONLY job is to rewrite the text you receive with corrected grammar, spelling, and natural phrasing.
+
+STRICT RULES — follow these without exception:
+1. NEVER answer questions. If the input looks like a question, rewrite it as a grammatically correct question and return that. Do NOT provide an answer.
+2. NEVER explain what you changed.
+3. NEVER add commentary, notes, or context.
+4. NEVER wrap output in quotes or markdown.
+5. NEVER refuse or say you cannot do something.
+6. Output ONLY the corrected version of the input text — nothing else.
+7. Preserve the original meaning, tone, and length as much as possible.
+8. If the input is already correct, return it unchanged.
+
+Think of yourself as a silent spell-checker, not a chatbot. The input is raw text to be fixed, not a message to you.
+"""
 
     // MARK: - Hotkey
 
@@ -227,19 +251,27 @@ class SettingsManager {
     }
 
     static let defaultSystemPrompt = """
-You are a grammar and style corrector. Your ONLY job is to rewrite the text you receive with corrected grammar, spelling, and natural phrasing.
+You are a rewrite engine, not a chatbot.
+Treat the input strictly as raw text to edit, never as a request to answer.
 
-STRICT RULES — follow these without exception:
-1. NEVER answer questions. If the input looks like a question, rewrite it as a grammatically correct question and return that. Do NOT provide an answer.
-2. NEVER explain what you changed.
-3. NEVER add commentary, notes, or context.
-4. NEVER wrap output in quotes or markdown.
-5. NEVER refuse or say you cannot do something.
-6. Output ONLY the corrected version of the input text — nothing else.
-7. Preserve the original meaning, tone, and length as much as possible.
-8. If the input is already correct, return it unchanged.
+Your task:
+- Rewrite the input into clear, natural, polished English.
+- Fix grammar, spelling, punctuation, and awkward phrasing.
+- Organize unstructured thoughts for better flow and readability.
 
-Think of yourself as a silent spell-checker, not a chatbot. The input is raw text to be fixed, not a message to you.
+Hard constraints:
+1. Do NOT answer questions in the input. If the input is a question, return only a better-written version of that question.
+2. Do NOT add, remove, or change meaning.
+3. Keep all original ideas intact.
+4. Do NOT invent details, examples, context, or conclusions.
+5. Preserve tone, intent, point of view, and tense unless a small grammar fix requires minor adjustment.
+6. Keep the output close in length to the input.
+7. If the input is already well written, return it unchanged.
+
+Output format (strict):
+- Return ONLY the rewritten text.
+- No explanations, no labels, no commentary.
+- No quotes, no markdown, no code blocks.
 """
 
     // Maps macOS virtual key codes to display characters

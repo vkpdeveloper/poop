@@ -29,6 +29,25 @@ class LLMService {
     static let shared = LLMService()
     private init() {}
 
+    private func stripThinkBlocks(from text: String) -> String {
+        let pattern = #"<think\b[^>]*>.*?</think>"#
+
+        guard let regex = try? NSRegularExpression(
+            pattern: pattern,
+            options: [.caseInsensitive, .dotMatchesLineSeparators]
+        ) else {
+            return text
+        }
+
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "")
+    }
+
+    private func sanitizeResponseContent(_ content: String, isGroqProvider: Bool) -> String {
+        let withoutThinkBlocks = isGroqProvider ? stripThinkBlocks(from: content) : content
+        return withoutThinkBlocks.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+    }
+
     func correctGrammar(_ text: String) async throws -> String {
         let settings = SettingsManager.shared
 
@@ -115,7 +134,13 @@ class LLMService {
             throw LLMError.emptyResponse
         }
 
-        let result = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = sanitizeResponseContent(content, isGroqProvider: settings.selectedProvider == .groq)
+
+        guard !result.isEmpty else {
+            Logger.llm.error("✗ Response became empty after sanitization")
+            throw LLMError.emptyResponse
+        }
+
         Logger.llm.info("✓ Got corrected text (\(result.count) chars)")
         return result
     }
