@@ -61,6 +61,16 @@ open poop.xcodeproj
 
 Hit **Run** (⌘R). Grant Accessibility access when prompted. That's it.
 
+Or build a shareable DMG without an Apple Developer account:
+
+```bash
+./release.sh
+```
+
+This script applies a local ad-hoc code signature to `poop.app`, which avoids the Accessibility/TCC trust mismatch that unsigned bundles can hit.
+
+When sharing the DMG, recipients may still need to right-click the app and choose **Open** on first launch (because it's not notarized).
+
 ---
 
 ## Setup

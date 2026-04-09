@@ -45,6 +45,14 @@ xcodebuild build \
 [ -d "$APP_PATH" ] || error "Build failed — .app not found at:\n  $APP_PATH"
 success "Build succeeded → $APP_PATH"
 
+# ── Sign app bundle (local ad-hoc signing) ───────────────────────────────────
+# We intentionally use ad-hoc signing so no Apple Developer account is required.
+# This still gives the bundle a stable code signature for Accessibility/TCC checks.
+info "Applying local ad-hoc signature..."
+codesign --force --deep --sign - --identifier "com.ordinity.poop" "$APP_PATH"
+codesign --verify --deep --strict --verbose=2 "$APP_PATH" > /dev/null
+success "App signed (ad-hoc)"
+
 # ── Stage DMG contents ────────────────────────────────────────────────────────
 info "Staging DMG contents..."
 STAGING="$BUILD_DIR/dmg-staging"

@@ -46,6 +46,9 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 540, height: 800)
         .onAppear { refreshAccessibility() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshAccessibility()
+        }
     }
 
     // MARK: - API Section
