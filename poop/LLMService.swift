@@ -90,7 +90,8 @@ class LLMService {
                 ["role": "user",   "content": text]
             ],
             "temperature": 0.3,
-            "max_tokens":  2048
+            "max_tokens":  2048,
+            "reasoning_effort": "none",
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
