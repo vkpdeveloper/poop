@@ -43,7 +43,7 @@ No Grammarly subscription. No browser extension. No bullshit.
 
 ## Requirements
 
-- macOS 14 Sonoma or later
+- macOS 14 Sonoma, macOS 15 Sequoia, or later
 - Xcode 15+ (to build from source)
 - **Accessibility permission** (required to read selected text and paste back)
 
