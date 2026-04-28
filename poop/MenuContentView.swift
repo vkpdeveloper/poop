@@ -4,7 +4,7 @@ import AppKit
 
 struct MenuContentView: View {
     @Environment(\.openSettings) private var openSettings
-    private let state = AppState.shared
+    private let state    = AppState.shared
     private let settings = SettingsManager.shared
 
     var body: some View {
@@ -18,7 +18,29 @@ struct MenuContentView: View {
                 Label("Fix Grammar  \(settings.displayString)", systemImage: "sparkles")
             }
         }
-        .disabled(state.isProcessing)
+        .disabled(state.isProcessing || state.isRecording || state.isTranscribing)
+
+        // Voice Dictation
+        if settings.voiceDictationEnabled {
+            Button {
+                Task { @MainActor in
+                    if state.isRecording {
+                        await VoiceDictationManager.shared.stopAndTranscribe()
+                    } else {
+                        await VoiceDictationManager.shared.startRecording()
+                    }
+                }
+            } label: {
+                if state.isRecording {
+                    Label("Stop Dictation  ↵", systemImage: "stop.circle.fill")
+                } else if state.isTranscribing {
+                    Label("Transcribing…", systemImage: "ellipsis.circle")
+                } else {
+                    Label("Dictate  \(settings.voiceDisplayString)", systemImage: "mic.fill")
+                }
+            }
+            .disabled(state.isProcessing || state.isTranscribing)
+        }
 
         Divider()
 

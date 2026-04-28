@@ -14,7 +14,7 @@ struct SettingsView: View {
     @AppStorage("modelName")     private var modelName     = "openai/gpt-4o-mini"
     @AppStorage("systemPrompt")  private var systemPrompt  = SettingsManager.defaultSystemPrompt
 
-    // Hotkey fields
+    // Grammar fix hotkey
     @AppStorage("hotkeyKeyCode") private var hotkeyKeyCode = 3
     @AppStorage("hotkeyCommand") private var hotkeyCommand = true
     @AppStorage("hotkeyShift")   private var hotkeyShift   = true
@@ -22,11 +22,22 @@ struct SettingsView: View {
     @AppStorage("hotkeyControl") private var hotkeyControl = false
     @AppStorage("showFloatingIndicator") private var showFloatingIndicator = true
 
-    @State private var isRecordingHotkey   = false
-    @State private var accessibilityGranted = false
-    @State private var showAPIKey           = false
-    @State private var startAtLogin         = (SMAppService.mainApp.status == .enabled)
-    @State private var loginItemError: String? = nil
+    // Voice dictation
+    @AppStorage("voiceDictationEnabled")  private var voiceDictationEnabled  = true
+    @AppStorage("voiceHotkeyKeyCode")     private var voiceHotkeyKeyCode     = 9
+    @AppStorage("voiceHotkeyCommand")     private var voiceHotkeyCommand     = false
+    @AppStorage("voiceHotkeyShift")       private var voiceHotkeyShift       = false
+    @AppStorage("voiceHotkeyOption")      private var voiceHotkeyOption      = true
+    @AppStorage("voiceHotkeyControl")     private var voiceHotkeyControl     = true
+
+    @State private var isRecordingHotkey        = false
+    @State private var isRecordingVoiceHotkey   = false
+    @State private var accessibilityGranted     = false
+    @State private var showAPIKey               = false
+    @State private var startAtLogin             = (SMAppService.mainApp.status == .enabled)
+    @State private var loginItemError: String?  = nil
+
+    private let stt = SpeechToTextService.shared
 
     private var selectedProvider: LLMProvider {
         LLMProvider(rawValue: selectedProviderRaw) ?? .openRouter
@@ -38,14 +49,18 @@ struct SettingsView: View {
         Form {
             apiSection
             shortcutSection
+            voiceDictationSection
             indicatorSection
             launchSection
             systemPromptSection
             permissionsSection
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 800)
-        .onAppear { refreshAccessibility() }
+        .frame(width: 540, height: 900)
+        .onAppear {
+            refreshAccessibility()
+            stt.checkReadiness()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshAccessibility()
         }
@@ -202,6 +217,130 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Voice Dictation Section
+
+    private var voiceDictationSection: some View {
+        Section {
+            Toggle(isOn: $voiceDictationEnabled) {
+                Label("Enable Voice Dictation", systemImage: "mic.fill")
+            }
+            .onChange(of: voiceDictationEnabled) { _, _ in
+                HotkeyManager.shared.reinstall()
+            }
+
+            if voiceDictationEnabled {
+                // Hotkey
+                LabeledContent {
+                    HotkeyRecorderButton(
+                        isRecording: $isRecordingVoiceHotkey,
+                        displayString: SettingsManager.shared.voiceDisplayString
+                    ) { keyCode, modifiers in
+                        voiceHotkeyKeyCode  = keyCode
+                        voiceHotkeyCommand  = modifiers.contains(.command)
+                        voiceHotkeyShift    = modifiers.contains(.shift)
+                        voiceHotkeyOption   = modifiers.contains(.option)
+                        voiceHotkeyControl  = modifiers.contains(.control)
+                        HotkeyManager.shared.reinstall()
+                    }
+                } label: {
+                    fieldLabel("Trigger", icon: "mic.badge.plus")
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+
+                // Model status + setup
+                modelStatusRow
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        } header: {
+            Text("Voice Dictation")
+        } footer: {
+            if voiceDictationEnabled {
+                Text("Press ↵ to finish recording. Text is transcribed locally using Parakeet on Apple Silicon.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: voiceDictationEnabled)
+    }
+
+    @ViewBuilder
+    private var modelStatusRow: some View {
+        switch stt.setupState {
+        case .unknown, .notSetup:
+            HStack {
+                Image(systemName: "arrow.down.circle")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Parakeet model not installed")
+                        .font(.subheadline)
+                    Text("~600 MB download via uv. Stored in HuggingFace cache.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Set Up") {
+                    Task { await stt.setupAndDownload() }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+
+        case .settingUp:
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.7)
+                    Text("Installing parakeet-mlx…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if !stt.setupLog.isEmpty {
+                    SetupLogView(lines: stt.setupLog)
+                }
+            }
+
+        case .downloadingModel:
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.7)
+                    Text(stt.setupProgress.isEmpty ? "Downloading model…" : stt.setupProgress)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                if !stt.setupLog.isEmpty {
+                    SetupLogView(lines: stt.setupLog)
+                }
+            }
+
+        case .ready:
+            HStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Parakeet model ready")
+                    .font(.subheadline)
+            }
+
+        case let .error(msg):
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Setup failed")
+                        .font(.subheadline)
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Retry") {
+                    Task { await stt.setupAndDownload() }
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
     // MARK: - Launch Section
 
     private var launchSection: some View {
@@ -283,7 +422,6 @@ struct SettingsView: View {
             }
             loginItemError = nil
         } catch {
-            // Roll the toggle back on failure
             startAtLogin = !enable
             loginItemError = "Could not \(enable ? "enable" : "disable") start at login: \(error.localizedDescription)"
         }
@@ -298,16 +436,13 @@ struct SettingsView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             selectedProviderRaw = provider.rawValue
         }
-        // Set base URL from the provider's known URL or from the stored/default host
         if let fixed = provider.fixedBaseURL {
             apiBaseURL = fixed
         } else {
             let host = customHost.isEmpty ? provider.defaultHost : customHost
             updateBaseURLFromHost(host)
         }
-        // Suggest the provider's default model
         modelName = provider.defaultModel
-        // Reset show-key state when switching
         showAPIKey = false
     }
 
@@ -366,7 +501,7 @@ struct ProviderPill: View {
     }
 }
 
-// MARK: - Hotkey Recorder Button
+// MARK: - Hotkey Recorder Button (grammar fix — key + modifiers only)
 
 struct HotkeyRecorderButton: View {
     @Binding var isRecording: Bool
@@ -413,5 +548,45 @@ struct HotkeyRecorderButton: View {
     private func stopRecording() {
         isRecording = false
         if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
+    }
+}
+
+// MARK: - Setup Log View
+
+/// Scrollable monospaced log box shown during STT install / model download.
+struct SetupLogView: View {
+    let lines: [String]
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 1) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
+                        Text(line)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .id(idx)
+                    }
+                }
+                .padding(6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, minHeight: 70, maxHeight: 120)
+            .background(Color(NSColor.textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+            .onChange(of: lines.count) { _, _ in
+                // Auto-scroll to the bottom as new lines arrive
+                if let last = lines.indices.last {
+                    withAnimation(.easeOut(duration: 0.1)) {
+                        proxy.scrollTo(last, anchor: .bottom)
+                    }
+                }
+            }
+        }
     }
 }

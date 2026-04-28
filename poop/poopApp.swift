@@ -69,6 +69,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         // Create the floating indicator panel (hidden until first use)
         FloatingIndicatorManager.shared.setup()
+        // Create the waveform panel for voice dictation (hidden until recording)
+        WaveformPanelManager.shared.setup()
+        // Check if the STT environment is already configured
+        SpeechToTextService.shared.checkReadiness()
         setupHotkey()
     }
 

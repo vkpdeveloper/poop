@@ -20,4 +20,10 @@ extension Logger {
 
     /// App lifecycle
     static let app         = Logger(subsystem: subsystem, category: "App")
+
+    /// Voice recording + microphone
+    static let voice       = Logger(subsystem: subsystem, category: "Voice")
+
+    /// Speech-to-text service (Python subprocess, model)
+    static let stt         = Logger(subsystem: subsystem, category: "STT")
 }
