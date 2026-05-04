@@ -709,7 +709,7 @@ struct TradingPane: View {
                 }
 
                 SettingsRow(icon: "link", title: "Callback URL", subtitle: "Set this redirect URL in your Kite Connect app.", showDivider: false) {
-                    Text("http://localhost:23864/callback")
+                    Text(KiteHTTPServer.shared.callbackURL)
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)

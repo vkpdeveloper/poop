@@ -228,6 +228,7 @@ struct ModernPortfolioView: View {
 
             // Summary
             let totalValue = totalPortfolioValue
+            let totalInvested = totalPortfolioInvested
             let totalPnL = totalPortfolioPnL
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
@@ -246,8 +247,22 @@ struct ModernPortfolioView: View {
                     )
             }
 
+            HStack(spacing: 8) {
+                Text("Invested \(formatCurrency(totalInvested))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(totalPnL >= 0 ? "Gain" : "Loss")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Text(formatPnL(totalPnL))
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundColor(totalPnL >= 0 ? .green : .red)
+            }
+
             // Holdings list
-            if state.kiteHoldings.isEmpty {
+            if state.kiteMFHoldings.isEmpty {
                 if state.kiteIsLoading {
                     HStack(spacing: 8) {
                         ProgressView().scaleEffect(0.6)
@@ -259,9 +274,9 @@ struct ModernPortfolioView: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    ForEach(state.kiteHoldings.prefix(5)) { holding in
-                        HoldingRow(holding: holding)
-                        if holding.id != state.kiteHoldings.prefix(5).last?.id {
+                    ForEach(state.kiteMFHoldings.prefix(5)) { holding in
+                        MFHoldingRow(holding: holding)
+                        if holding.id != state.kiteMFHoldings.prefix(5).last?.id {
                             Divider()
                                 .opacity(0.3)
                         }
@@ -272,8 +287,8 @@ struct ModernPortfolioView: View {
                         .fill(Color(NSColor.controlBackgroundColor))
                 )
 
-                if state.kiteHoldings.count > 5 {
-                    Text("+ \(state.kiteHoldings.count - 5) more")
+                if state.kiteMFHoldings.count > 5 {
+                    Text("+ \(state.kiteMFHoldings.count - 5) more")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -288,7 +303,7 @@ struct ModernPortfolioView: View {
             }
         }
         .task {
-            if state.kiteHoldings.isEmpty && !state.kiteIsLoading && !state.kiteIsRefreshing {
+            if state.kiteMFHoldings.isEmpty && !state.kiteIsLoading && !state.kiteIsRefreshing {
                 await auth.refreshPortfolio()
             }
         }
@@ -297,13 +312,19 @@ struct ModernPortfolioView: View {
     // MARK: - Computed
 
     private var totalPortfolioValue: Double {
-        state.kiteHoldings.reduce(0.0) { sum, h in
-            sum + Double(h.quantity ?? 0) * (h.last_price ?? 0)
+        state.kiteMFHoldings.reduce(0.0) { sum, h in
+            sum + (h.quantity ?? 0) * (h.last_price ?? 0)
+        }
+    }
+
+    private var totalPortfolioInvested: Double {
+        state.kiteMFHoldings.reduce(0.0) { sum, h in
+            sum + (h.quantity ?? 0) * (h.average_price ?? 0)
         }
     }
 
     private var totalPortfolioPnL: Double {
-        state.kiteHoldings.reduce(0.0) { $0 + ($1.pnl ?? 0) }
+        totalPortfolioValue - totalPortfolioInvested
     }
 
     private func formatCurrency(_ value: Double) -> String {
@@ -329,19 +350,19 @@ struct ModernPortfolioView: View {
 
 // MARK: - Holding Row
 
-struct HoldingRow: View {
-    let holding: KiteHolding
+struct MFHoldingRow: View {
+    let holding: KiteMFHolding
 
     var body: some View {
         HStack(spacing: 4) {
-            Text(holding.tradingsymbol)
+            Text(holding.fund ?? holding.tradingsymbol)
                 .font(.system(size: 12, weight: .medium))
                 .lineLimit(1)
 
             Spacer(minLength: 8)
 
             if let qty = holding.quantity {
-                Text("×\(qty)")
+                Text("×\(formatQuantity(qty))")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
@@ -353,7 +374,7 @@ struct HoldingRow: View {
                     .frame(width: 70, alignment: .trailing)
             }
 
-            if let pnl = holding.pnl {
+            if let pnl = holdingPnL {
                 Text(formatPnL(pnl))
                     .font(.system(size: 10, weight: .medium))
                     .monospacedDigit()
@@ -377,5 +398,22 @@ struct HoldingRow: View {
     private func formatPnL(_ value: Double) -> String {
         let sign = value >= 0 ? "+" : ""
         return "\(sign)₹\(String(format: "%.2f", value))"
+    }
+
+    private func formatQuantity(_ value: Double) -> String {
+        if value.rounded() == value {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.3f", value)
+    }
+
+    private var holdingPnL: Double? {
+        guard let quantity = holding.quantity,
+              let averagePrice = holding.average_price,
+              let lastPrice = holding.last_price else {
+            return nil
+        }
+
+        return (quantity * lastPrice) - (quantity * averagePrice)
     }
 }

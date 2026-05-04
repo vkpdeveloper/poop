@@ -7,11 +7,11 @@ struct KitePortfolioView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             portfolioSummary
-            stockSection
+            mutualFundSection
             footer
         }
         .task {
-            if state.kiteHoldings.isEmpty && !state.kiteIsLoading && !state.kiteIsRefreshing {
+            if state.kiteMFHoldings.isEmpty && !state.kiteIsLoading && !state.kiteIsRefreshing {
                 await auth.refreshPortfolio()
             }
         }
@@ -51,7 +51,7 @@ struct KitePortfolioView: View {
         }
 
         HStack {
-            Text(totalPnL >= 0 ? "P&L" : "Loss")
+            Text(totalPnL >= 0 ? "Gain" : "Loss")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
@@ -63,15 +63,15 @@ struct KitePortfolioView: View {
         .padding(.bottom, 4)
     }
 
-    // MARK: - Stock Holdings
+    // MARK: - Mutual Fund Holdings
 
     @ViewBuilder
-    private var stockSection: some View {
-        if state.kiteHoldings.isEmpty {
+    private var mutualFundSection: some View {
+        if state.kiteMFHoldings.isEmpty {
             if state.kiteIsLoading {
                 HStack(spacing: 8) {
                     ProgressView().scaleEffect(0.7)
-                    Text("Loading holdings…")
+                    Text("Loading mutual fund holdings…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -85,16 +85,16 @@ struct KitePortfolioView: View {
         } else {
             Divider()
 
-            ForEach(state.kiteHoldings.prefix(5)) { holding in
+            ForEach(state.kiteMFHoldings.prefix(5)) { holding in
                 HStack(spacing: 4) {
-                    Text(holding.tradingsymbol)
+                    Text(holding.fund ?? holding.tradingsymbol)
                         .font(.subheadline)
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     if let qty = holding.quantity {
-                        Text("×\(qty)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Text("×\(formatQuantity(qty))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
                     if let ltp = holding.last_price {
                         Text(formatCurrency(ltp))
@@ -102,7 +102,7 @@ struct KitePortfolioView: View {
                             .monospacedDigit()
                             .frame(width: 80, alignment: .trailing)
                     }
-                    if let pnl = holding.pnl {
+                    if let pnl = holdingPnL(for: holding) {
                         Text(formatPnL(pnl))
                             .font(.caption)
                             .monospacedDigit()
@@ -113,8 +113,8 @@ struct KitePortfolioView: View {
                 .padding(.vertical, 1)
             }
 
-            if state.kiteHoldings.count > 5 {
-                Text("+ \(state.kiteHoldings.count - 5) more…")
+            if state.kiteMFHoldings.count > 5 {
+                Text("+ \(state.kiteMFHoldings.count - 5) more…")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -148,19 +148,19 @@ struct KitePortfolioView: View {
     // MARK: - Computed
 
     private var totalPortfolioValue: Double {
-        state.kiteHoldings.reduce(0.0) { sum, h in
-            sum + Double(h.quantity ?? 0) * (h.last_price ?? 0)
+        state.kiteMFHoldings.reduce(0.0) { sum, h in
+            sum + (h.quantity ?? 0) * (h.last_price ?? 0)
         }
     }
 
     private var totalPortfolioInvested: Double {
-        state.kiteHoldings.reduce(0.0) { sum, h in
-            sum + Double(h.quantity ?? 0) * (h.average_price ?? 0)
+        state.kiteMFHoldings.reduce(0.0) { sum, h in
+            sum + (h.quantity ?? 0) * (h.average_price ?? 0)
         }
     }
 
     private var totalPortfolioPnL: Double {
-        state.kiteHoldings.reduce(0.0) { $0 + ($1.pnl ?? 0) }
+        totalPortfolioValue - totalPortfolioInvested
     }
 
     private func formatCurrency(_ value: Double) -> String {
@@ -175,6 +175,23 @@ struct KitePortfolioView: View {
     private func formatPnL(_ value: Double) -> String {
         let sign = value >= 0 ? "+" : ""
         return "\(sign)₹\(String(format: "%.2f", value))"
+    }
+
+    private func formatQuantity(_ value: Double) -> String {
+        if value.rounded() == value {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.3f", value)
+    }
+
+    private func holdingPnL(for holding: KiteMFHolding) -> Double? {
+        guard let quantity = holding.quantity,
+              let averagePrice = holding.average_price,
+              let lastPrice = holding.last_price else {
+            return nil
+        }
+
+        return (quantity * lastPrice) - (quantity * averagePrice)
     }
 
     private func formatTime(_ date: Date) -> String {

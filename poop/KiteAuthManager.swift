@@ -142,7 +142,7 @@ class KiteAuthManager {
         guard !settings.kiteAccessToken.isEmpty else { return }
 
         let state = AppState.shared
-        let isFirstLoad = state.kiteHoldings.isEmpty && state.kiteMFHoldings.isEmpty && state.kitePositions.isEmpty
+        let isFirstLoad = state.kiteMFHoldings.isEmpty
 
         if isFirstLoad {
             state.kiteIsLoading = true
@@ -157,28 +157,11 @@ class KiteAuthManager {
         }
 
         do {
-            let holdings = try await service.fetchHoldings()
-            state.kiteHoldings = holdings
-            Logger.kite.info("Fetched \(holdings.count) holdings")
-        } catch {
-            Logger.kite.error("Failed to fetch holdings: \(error.localizedDescription)")
-            // Keep existing data — transient network errors shouldn't blank the UI
-        }
-
-        do {
             let mfHoldings = try await service.fetchMFHoldings()
             state.kiteMFHoldings = mfHoldings
             Logger.kite.info("Fetched \(mfHoldings.count) MF holdings")
         } catch {
             Logger.kite.error("Failed to fetch MF holdings: \(error.localizedDescription)")
-        }
-
-        do {
-            let positions = try await service.fetchPositions()
-            state.kitePositions = positions
-            Logger.kite.info("Fetched \(positions.count) positions")
-        } catch {
-            Logger.kite.error("Failed to fetch positions: \(error.localizedDescription)")
         }
     }
 }

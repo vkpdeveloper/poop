@@ -56,16 +56,12 @@ struct KiteHolding: Codable, Identifiable {
 
 struct KiteMFHolding: Codable, Identifiable {
     let tradingsymbol: String
-    let scheme: String?
+    let fund: String?
     let folio: String?
-    let name: String?
     let last_price: Double?
     let quantity: Double?
     var pnl: Double?
     let average_price: Double?
-    let instrument_token: String?
-    let isin: String?
-    let amc: String?
 
     var id: String { "\(tradingsymbol)_\(folio ?? "")" }
 }

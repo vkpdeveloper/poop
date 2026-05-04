@@ -12,10 +12,10 @@ final class KiteHTTPServer: @unchecked Sendable {
 
     private let lock = NSLock()
     private let port: UInt16 = 23864
-    private let host = "127.0.0.1"
+    private let callbackHost = "127.0.0.1"
 
-    private var callbackURL: String {
-        "http://localhost:\(port)/callback"
+    var callbackURL: String {
+        "http://\(callbackHost):\(port)/callback"
     }
 
     func start(onReceiveRequestToken: @escaping (String) -> Void) -> Bool {
@@ -34,7 +34,19 @@ final class KiteHTTPServer: @unchecked Sendable {
         parameters.requiredInterfaceType = .loopback
         parameters.allowLocalEndpointReuse = true
 
-        let listener = try! NWListener(using: parameters, on: NWEndpoint.Port(rawValue: port)!)
+        let listener: NWListener
+        do {
+            guard let listenerPort = NWEndpoint.Port(rawValue: port) else {
+                Logger.kite.error("Invalid Kite HTTP server port: \(self.port)")
+                onCallback = nil
+                return false
+            }
+            listener = try NWListener(using: parameters, on: listenerPort)
+        } catch {
+            Logger.kite.error("Failed to start Kite HTTP server: \(error.localizedDescription)")
+            onCallback = nil
+            return false
+        }
         self.listener = listener
 
         listener.newConnectionHandler = { [weak self] connection in
@@ -44,7 +56,7 @@ final class KiteHTTPServer: @unchecked Sendable {
         listener.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
-                Logger.kite.info("Kite HTTP server ready on \(self?.host ?? "?"):\(self?.port ?? 0)")
+                Logger.kite.info("Kite HTTP server ready on \(self?.callbackHost ?? "?"):\(self?.port ?? 0)")
             case .failed(let error):
                 Logger.kite.error("Kite HTTP server failed: \(error.localizedDescription)")
                 self?.stop()
@@ -57,7 +69,7 @@ final class KiteHTTPServer: @unchecked Sendable {
 
         listener.start(queue: .main)
         isRunning = true
-        Logger.kite.info("Started Kite HTTP server on \(self.host):\(self.port)")
+        Logger.kite.info("Started Kite HTTP server on \(self.callbackHost):\(self.port)")
         return true
     }
 
@@ -86,9 +98,13 @@ final class KiteHTTPServer: @unchecked Sendable {
         DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: timeout)
 
         var receivedData = Data()
+        let headerTerminator = Data("\r\n\r\n".utf8)
+        var didProcessRequest = false
 
         func readNext() {
             connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, isComplete, error in
+                guard !didProcessRequest else { return }
+
                 timeout.cancel()
 
                 if let error = error {
@@ -101,7 +117,11 @@ final class KiteHTTPServer: @unchecked Sendable {
                     receivedData.append(data)
                 }
 
-                if isComplete || data == nil || (data?.isEmpty == true) {
+                if receivedData.range(of: headerTerminator) != nil {
+                    didProcessRequest = true
+                    self?.processRequest(receivedData, on: connection)
+                } else if isComplete || data == nil || (data?.isEmpty == true) {
+                    didProcessRequest = true
                     self?.processRequest(receivedData, on: connection)
                 } else {
                     readNext()
@@ -138,7 +158,7 @@ final class KiteHTTPServer: @unchecked Sendable {
 
         let pathWithQuery = parts[1]
 
-        guard let urlComponents = URLComponents(string: "http://\(host):\(port)\(pathWithQuery)"),
+        guard let urlComponents = URLComponents(string: "http://\(callbackHost):\(port)\(pathWithQuery)"),
               urlComponents.path == "/callback" else {
             sendResponse(status: 404, body: "Not Found", on: connection)
             connection.cancel()
