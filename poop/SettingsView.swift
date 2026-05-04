@@ -3,159 +3,410 @@ import SwiftUI
 import AppKit
 import ServiceManagement
 
+// MARK: - Sidebar Item
+
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general, shortcuts, voice, trading, system
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general:   "General"
+        case .shortcuts: "Shortcuts"
+        case .voice:     "Voice"
+        case .trading:   "Trading"
+        case .system:    "System"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .general:   "gear"
+        case .shortcuts: "command.square"
+        case .voice:     "mic.fill"
+        case .trading:   "chart.line.uptrend.xyaxis"
+        case .system:    "checkmark.shield"
+        }
+    }
+}
+
+// MARK: - Settings Window Container
+
 struct SettingsView: View {
-    // Provider + derived URL storage
+    @State private var selectedPane: SettingsPane? = .general
+    @State private var searchText = ""
+
+    private var filteredPanes: [SettingsPane] {
+        if searchText.isEmpty { return SettingsPane.allCases }
+        return SettingsPane.allCases.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // MARK: Sidebar
+            sidebar
+                .frame(width: 220)
+                .background(Color(NSColor.controlBackgroundColor))
+
+            // MARK: Divider
+            Divider()
+                .opacity(0.4)
+
+            // MARK: Detail
+            detailView(for: selectedPane)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.windowBackgroundColor))
+        }
+        .frame(minWidth: 800, idealWidth: 900, minHeight: 550, idealHeight: 650)
+    }
+
+    // MARK: Sidebar
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            // Search
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                TextField("Search", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(NSColor.textBackgroundColor).opacity(0.5))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color(NSColor.separatorColor).opacity(0.3), lineWidth: 0.5)
+            )
+            .padding(.horizontal, 12)
+            .padding(.top, 16)
+            .padding(.bottom, 8)
+
+            // Pane list
+            List(selection: $selectedPane) {
+                Section {
+                    ForEach(filteredPanes) { pane in
+                        SidebarRow(
+                            pane: pane,
+                            isSelected: selectedPane == pane
+                        )
+                        .tag(pane)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                        .listRowBackground(Color.clear)
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    // MARK: Detail View Router
+
+    @ViewBuilder
+    private func detailView(for pane: SettingsPane?) -> some View {
+        switch pane {
+        case .general:   GeneralPane()
+        case .shortcuts: ShortcutsPane()
+        case .voice:     VoicePane()
+        case .trading:   TradingPane()
+        case .system:    SystemPane()
+        case .none:      EmptyView()
+        }
+    }
+}
+
+// MARK: - Sidebar Row
+
+struct SidebarRow: View {
+    let pane: SettingsPane
+    let isSelected: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: pane.icon)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isSelected ? .white : .secondary)
+                .frame(width: 18, alignment: .center)
+
+            Text(pane.title)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? .white : .primary)
+
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.accentColor : Color.clear)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+// MARK: - Detail Container with Toolbar
+
+struct DetailContainer<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Toolbar
+            HStack {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Color(NSColor.windowBackgroundColor))
+
+            Divider()
+                .opacity(0.4)
+
+            // Scrollable content
+            ScrollView {
+                VStack(spacing: 20) {
+                    content
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+            }
+        }
+    }
+}
+
+// MARK: - Modern Section Card
+
+struct SettingsCard<Content: View>: View {
+    let header: String?
+    let footer: String?
+    @ViewBuilder let content: Content
+
+    init(header: String? = nil, footer: String? = nil, @ViewBuilder content: () -> Content) {
+        self.header = header
+        self.footer = footer
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let header = header {
+                Text(header)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 4)
+            }
+
+            VStack(spacing: 0) {
+                content
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(NSColor.separatorColor).opacity(0.25), lineWidth: 0.5)
+            )
+
+            if let footer = footer {
+                Text(footer)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+            }
+        }
+    }
+}
+
+// MARK: - Modern Row
+
+struct SettingsRow<Content: View>: View {
+    let icon: String?
+    let title: String
+    let subtitle: String?
+    @ViewBuilder let trailing: Content
+    let showDivider: Bool
+
+    init(
+        icon: String? = nil,
+        title: String,
+        subtitle: String? = nil,
+        showDivider: Bool = true,
+        @ViewBuilder trailing: () -> Content
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.showDivider = showDivider
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                if let icon = icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 20, alignment: .center)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.primary)
+
+                    if let subtitle = subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer()
+
+                trailing
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+
+            if showDivider {
+                Divider()
+                    .padding(.leading, icon != nil ? 42 : 12)
+                    .opacity(0.3)
+            }
+        }
+    }
+}
+
+// MARK: - General Pane
+
+struct GeneralPane: View {
     @AppStorage("selectedProvider") private var selectedProviderRaw = LLMProvider.openRouter.rawValue
     @AppStorage("customHost")       private var customHost          = ""
-
-    // API fields
-    @AppStorage("apiBaseURL")    private var apiBaseURL    = "https://openrouter.ai/api/v1"
-    @AppStorage("apiKey")        private var apiKey        = ""
-    @AppStorage("modelName")     private var modelName     = "openai/gpt-4o-mini"
-    @AppStorage("systemPrompt")  private var systemPrompt  = SettingsManager.defaultSystemPrompt
-
-    // Grammar fix hotkey
-    @AppStorage("hotkeyKeyCode") private var hotkeyKeyCode = 3
-    @AppStorage("hotkeyCommand") private var hotkeyCommand = true
-    @AppStorage("hotkeyShift")   private var hotkeyShift   = true
-    @AppStorage("hotkeyOption")  private var hotkeyOption  = false
-    @AppStorage("hotkeyControl") private var hotkeyControl = false
+    @AppStorage("apiBaseURL")       private var apiBaseURL    = "https://openrouter.ai/api/v1"
+    @AppStorage("apiKey")           private var apiKey        = ""
+    @AppStorage("modelName")        private var modelName     = "openai/gpt-4o-mini"
+    @AppStorage("systemPrompt")     private var systemPrompt  = SettingsManager.defaultSystemPrompt
     @AppStorage("showFloatingIndicator") private var showFloatingIndicator = true
 
-    // Voice dictation
-    @AppStorage("voiceDictationEnabled")  private var voiceDictationEnabled  = true
-    @AppStorage("voiceHotkeyKeyCode")     private var voiceHotkeyKeyCode     = 9
-    @AppStorage("voiceHotkeyCommand")     private var voiceHotkeyCommand     = false
-    @AppStorage("voiceHotkeyShift")       private var voiceHotkeyShift       = false
-    @AppStorage("voiceHotkeyOption")      private var voiceHotkeyOption      = true
-    @AppStorage("voiceHotkeyControl")     private var voiceHotkeyControl     = true
-
-    @State private var isRecordingHotkey        = false
-    @State private var isRecordingVoiceHotkey   = false
-    @State private var accessibilityGranted     = false
-    @State private var showAPIKey               = false
-    @State private var startAtLogin             = (SMAppService.mainApp.status == .enabled)
-    @State private var loginItemError: String?  = nil
-
-    private let stt = SpeechToTextService.shared
+    @State private var showAPIKey = false
 
     private var selectedProvider: LLMProvider {
         LLMProvider(rawValue: selectedProviderRaw) ?? .openRouter
     }
 
-    // MARK: - Body
-
     var body: some View {
-        Form {
-            apiSection
-            shortcutSection
-            voiceDictationSection
-            indicatorSection
-            launchSection
-            systemPromptSection
-            permissionsSection
-        }
-        .formStyle(.grouped)
-        .frame(width: 540, height: 900)
-        .onAppear {
-            refreshAccessibility()
-            stt.checkReadiness()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            refreshAccessibility()
-        }
-    }
-
-    // MARK: - API Section
-
-    private var apiSection: some View {
-        Section {
-            // Provider picker
-            VStack(alignment: .leading, spacing: 10) {
-                Label("Provider", systemImage: "network")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-
-                providerGrid
-            }
-            .padding(.vertical, 4)
-
-            Divider()
-                .padding(.vertical, 2)
-
-            // Base URL — only for OpenAI and Anthropic (editable)
-            if selectedProvider.showsBaseURLField {
-                LabeledContent {
-                    TextField(selectedProvider.fixedBaseURL ?? "", text: $apiBaseURL)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 300)
-                } label: {
-                    fieldLabel("Base URL", icon: "link")
+        DetailContainer(title: "General") {
+            // Provider
+            SettingsCard(header: "AI Provider") {
+                VStack(alignment: .leading, spacing: 12) {
+                    providerGrid
+                        .padding(12)
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // Host — only for local providers (Ollama, LM Studio)
-            if selectedProvider.isLocal {
-                LabeledContent {
-                    TextField(selectedProvider.defaultHost, text: $customHost)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 300)
-                        .onChange(of: customHost) { _, host in
-                            updateBaseURLFromHost(host)
-                        }
-                } label: {
-                    fieldLabel("Host", icon: "externaldrive.connected.to.line.below")
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-
-                Text("The path \"/v1\" will be appended automatically.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-
-            // API Key — hidden for local providers
-            if selectedProvider.requiresAPIKey {
-                LabeledContent {
-                    HStack(spacing: 6) {
-                        if showAPIKey {
-                            TextField(selectedProvider.apiKeyPlaceholder, text: $apiKey)
-                                .textFieldStyle(.roundedBorder)
-                        } else {
-                            SecureField(selectedProvider.apiKeyPlaceholder, text: $apiKey)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        Button {
-                            showAPIKey.toggle()
-                        } label: {
-                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help(showAPIKey ? "Hide API key" : "Show API key")
+            // Connection
+            SettingsCard(header: "Connection") {
+                if selectedProvider.showsBaseURLField {
+                    SettingsRow(icon: "link", title: "Base URL", showDivider: true) {
+                        TextField("", text: $apiBaseURL)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 220)
                     }
-                    .frame(maxWidth: 300)
-                } label: {
-                    fieldLabel("API Key", icon: "key")
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+
+                if selectedProvider.isLocal {
+                    SettingsRow(icon: "externaldrive.connected.to.line.below", title: "Host", subtitle: "The path \"/v1\" will be appended automatically", showDivider: true) {
+                        TextField("", text: $customHost)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 220)
+                            .onChange(of: customHost) { _, host in
+                                updateBaseURLFromHost(host)
+                            }
+                    }
+                }
+
+                if selectedProvider.requiresAPIKey {
+                    SettingsRow(icon: "key", title: "API Key", showDivider: true) {
+                        HStack(spacing: 6) {
+                            if showAPIKey {
+                                TextField(selectedProvider.apiKeyPlaceholder, text: $apiKey)
+                                    .textFieldStyle(.roundedBorder)
+                            } else {
+                                SecureField(selectedProvider.apiKeyPlaceholder, text: $apiKey)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            Button {
+                                showAPIKey.toggle()
+                            } label: {
+                                Image(systemName: showAPIKey ? "eye.slash" : "eye")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .frame(width: 220)
+                    }
+                }
+
+                SettingsRow(icon: "cpu", title: "Model", showDivider: false) {
+                    TextField(selectedProvider.defaultModel, text: $modelName)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+                }
             }
 
-            // Model
-            LabeledContent {
-                TextField(selectedProvider.defaultModel, text: $modelName)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 300)
-            } label: {
-                fieldLabel("Model", icon: "cpu")
+            // Indicator
+            SettingsCard(header: "Appearance", footer: "A small pulsing dot appears at the bottom-right corner of your screen while fixing text.") {
+                SettingsRow(icon: "circle.fill", title: "Floating Indicator", showDivider: false) {
+                    Toggle("", isOn: $showFloatingIndicator)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                }
             }
-        } header: {
-            Text("API Configuration")
+
+            // System Prompt
+            SettingsCard(header: "System Prompt") {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextEditor(text: $systemPrompt)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 100)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+
+                    HStack {
+                        Spacer()
+                        Button("Reset to Default") {
+                            systemPrompt = SettingsManager.defaultSystemPrompt
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                    }
+                }
+                .padding(12)
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: selectedProviderRaw)
     }
-
-    // MARK: - Provider Grid
 
     private var providerGrid: some View {
         let columns = [
@@ -173,263 +424,6 @@ struct SettingsView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Indicator Section
-
-    private var indicatorSection: some View {
-        Section {
-            Toggle(isOn: $showFloatingIndicator) {
-                Label("Floating Indicator", systemImage: "circle.fill")
-            }
-
-            if showFloatingIndicator {
-                Text("A small pulsing dot appears at the bottom-right corner of your screen while fixing text — useful when the menu bar is hidden.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        } header: {
-            Text("Indicator")
-        }
-        .animation(.easeInOut(duration: 0.2), value: showFloatingIndicator)
-    }
-
-    // MARK: - Shortcut Section
-
-    private var shortcutSection: some View {
-        Section("Keyboard Shortcut") {
-            LabeledContent {
-                HotkeyRecorderButton(
-                    isRecording: $isRecordingHotkey,
-                    displayString: SettingsManager.shared.displayString
-                ) { keyCode, modifiers in
-                    hotkeyKeyCode = keyCode
-                    hotkeyCommand = modifiers.contains(.command)
-                    hotkeyShift   = modifiers.contains(.shift)
-                    hotkeyOption  = modifiers.contains(.option)
-                    hotkeyControl = modifiers.contains(.control)
-                    HotkeyManager.shared.reinstall()
-                }
-            } label: {
-                fieldLabel("Trigger", icon: "command.square")
-            }
-        }
-    }
-
-    // MARK: - Voice Dictation Section
-
-    private var voiceDictationSection: some View {
-        Section {
-            Toggle(isOn: $voiceDictationEnabled) {
-                Label("Enable Voice Dictation", systemImage: "mic.fill")
-            }
-            .onChange(of: voiceDictationEnabled) { _, _ in
-                HotkeyManager.shared.reinstall()
-            }
-
-            if voiceDictationEnabled {
-                // Hotkey
-                LabeledContent {
-                    HotkeyRecorderButton(
-                        isRecording: $isRecordingVoiceHotkey,
-                        displayString: SettingsManager.shared.voiceDisplayString
-                    ) { keyCode, modifiers in
-                        voiceHotkeyKeyCode  = keyCode
-                        voiceHotkeyCommand  = modifiers.contains(.command)
-                        voiceHotkeyShift    = modifiers.contains(.shift)
-                        voiceHotkeyOption   = modifiers.contains(.option)
-                        voiceHotkeyControl  = modifiers.contains(.control)
-                        HotkeyManager.shared.reinstall()
-                    }
-                } label: {
-                    fieldLabel("Trigger", icon: "mic.badge.plus")
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-
-                // Model status + setup
-                modelStatusRow
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        } header: {
-            Text("Voice Dictation")
-        } footer: {
-            if voiceDictationEnabled {
-                Text("Press ↵ to finish recording. Text is transcribed locally using Parakeet on Apple Silicon.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: voiceDictationEnabled)
-    }
-
-    @ViewBuilder
-    private var modelStatusRow: some View {
-        switch stt.setupState {
-        case .unknown, .notSetup:
-            HStack {
-                Image(systemName: "arrow.down.circle")
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Parakeet model not installed")
-                        .font(.subheadline)
-                    Text("~600 MB download via uv. Stored in HuggingFace cache.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Set Up") {
-                    Task { await stt.setupAndDownload() }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-
-        case .settingUp:
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    ProgressView().scaleEffect(0.7)
-                    Text("Installing parakeet-mlx…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                if !stt.setupLog.isEmpty {
-                    SetupLogView(lines: stt.setupLog)
-                }
-            }
-
-        case .downloadingModel:
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    ProgressView().scaleEffect(0.7)
-                    Text(stt.setupProgress.isEmpty ? "Downloading model…" : stt.setupProgress)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                if !stt.setupLog.isEmpty {
-                    SetupLogView(lines: stt.setupLog)
-                }
-            }
-
-        case .ready:
-            HStack {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                Text("Parakeet model ready")
-                    .font(.subheadline)
-            }
-
-        case let .error(msg):
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Setup failed")
-                        .font(.subheadline)
-                    Text(msg)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Retry") {
-                    Task { await stt.setupAndDownload() }
-                }
-                .controlSize(.small)
-            }
-        }
-    }
-
-    // MARK: - Launch Section
-
-    private var launchSection: some View {
-        Section {
-            Toggle(isOn: $startAtLogin) {
-                Label("Start at Login", systemImage: "power")
-            }
-            .onChange(of: startAtLogin) { _, enabled in
-                applyLoginItem(enabled)
-            }
-
-            if let err = loginItemError {
-                Text(err)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .transition(.opacity)
-            }
-        } header: {
-            Text("Launch")
-        }
-        .animation(.easeInOut(duration: 0.2), value: loginItemError)
-    }
-
-    // MARK: - System Prompt Section
-
-    private var systemPromptSection: some View {
-        Section("System Prompt") {
-            TextEditor(text: $systemPrompt)
-                .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 90)
-
-            Button("Reset to Default") {
-                systemPrompt = SettingsManager.defaultSystemPrompt
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Permissions Section
-
-    private var permissionsSection: some View {
-        Section("Permissions") {
-            HStack(spacing: 8) {
-                Image(systemName: accessibilityGranted
-                      ? "checkmark.circle.fill"
-                      : "xmark.circle.fill")
-                    .foregroundStyle(accessibilityGranted ? .green : .red)
-
-                Text("Accessibility Access")
-
-                Spacer()
-
-                if !accessibilityGranted {
-                    Button("Open System Settings") {
-                        AccessibilityManager.shared.requestPermission()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                }
-            }
-
-            if !accessibilityGranted {
-                Text("Required to detect your keyboard shortcut and paste the fixed text.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func applyLoginItem(_ enable: Bool) {
-        do {
-            if enable {
-                try SMAppService.mainApp.register()
-            } else {
-                try SMAppService.mainApp.unregister()
-            }
-            loginItemError = nil
-        } catch {
-            startAtLogin = !enable
-            loginItemError = "Could not \(enable ? "enable" : "disable") start at login: \(error.localizedDescription)"
-        }
-    }
-
-    private func fieldLabel(_ title: String, icon: String) -> some View {
-        Label(title, systemImage: icon)
-            .foregroundStyle(.primary)
     }
 
     private func selectProvider(_ provider: LLMProvider) {
@@ -452,6 +446,383 @@ struct SettingsView: View {
             apiBaseURL = selectedProvider.defaultHost + "/v1"
         } else {
             apiBaseURL = trimmed + "/v1"
+        }
+    }
+}
+
+// MARK: - Shortcuts Pane
+
+struct ShortcutsPane: View {
+    @AppStorage("hotkeyKeyCode") private var hotkeyKeyCode = 3
+    @AppStorage("hotkeyCommand") private var hotkeyCommand = true
+    @AppStorage("hotkeyShift")   private var hotkeyShift   = true
+    @AppStorage("hotkeyOption")  private var hotkeyOption  = false
+    @AppStorage("hotkeyControl") private var hotkeyControl = false
+
+    @AppStorage("voiceHotkeyKeyCode")  private var voiceHotkeyKeyCode  = 9
+    @AppStorage("voiceHotkeyCommand")  private var voiceHotkeyCommand  = false
+    @AppStorage("voiceHotkeyShift")    private var voiceHotkeyShift    = false
+    @AppStorage("voiceHotkeyOption")   private var voiceHotkeyOption   = true
+    @AppStorage("voiceHotkeyControl")  private var voiceHotkeyControl  = true
+
+    @State private var isRecordingHotkey      = false
+    @State private var isRecordingVoiceHotkey = false
+
+    var body: some View {
+        DetailContainer(title: "Shortcuts") {
+            SettingsCard(header: "Grammar Fix", footer: "Press this shortcut to fix the selected text.") {
+                SettingsRow(icon: "sparkles", title: "Trigger", showDivider: false) {
+                    HotkeyRecorderButton(
+                        isRecording: $isRecordingHotkey,
+                        displayString: SettingsManager.shared.displayString
+                    ) { keyCode, modifiers in
+                        hotkeyKeyCode = keyCode
+                        hotkeyCommand = modifiers.contains(.command)
+                        hotkeyShift   = modifiers.contains(.shift)
+                        hotkeyOption  = modifiers.contains(.option)
+                        hotkeyControl = modifiers.contains(.control)
+                        HotkeyManager.shared.reinstall()
+                    }
+                }
+            }
+
+            SettingsCard(header: "Voice Dictation", footer: "Press this shortcut to start/stop voice recording.") {
+                SettingsRow(icon: "mic.fill", title: "Trigger", showDivider: false) {
+                    HotkeyRecorderButton(
+                        isRecording: $isRecordingVoiceHotkey,
+                        displayString: SettingsManager.shared.voiceDisplayString
+                    ) { keyCode, modifiers in
+                        voiceHotkeyKeyCode  = keyCode
+                        voiceHotkeyCommand  = modifiers.contains(.command)
+                        voiceHotkeyShift    = modifiers.contains(.shift)
+                        voiceHotkeyOption   = modifiers.contains(.option)
+                        voiceHotkeyControl  = modifiers.contains(.control)
+                        HotkeyManager.shared.reinstall()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Voice Pane
+
+struct VoicePane: View {
+    @AppStorage("voiceDictationEnabled") private var voiceDictationEnabled = true
+    private let stt = SpeechToTextService.shared
+
+    var body: some View {
+        DetailContainer(title: "Voice") {
+            SettingsCard(header: "Voice Dictation") {
+                SettingsRow(icon: "mic.fill", title: "Enable Voice Dictation", showDivider: false) {
+                    Toggle("", isOn: $voiceDictationEnabled)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .onChange(of: voiceDictationEnabled) { _, _ in
+                            HotkeyManager.shared.reinstall()
+                        }
+                }
+            }
+
+            if voiceDictationEnabled {
+                modelStatusCard
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: voiceDictationEnabled)
+        .onAppear {
+            stt.checkReadiness()
+        }
+    }
+
+    @ViewBuilder
+    private var modelStatusCard: some View {
+        switch stt.setupState {
+        case .unknown, .notSetup:
+            SettingsCard(header: "Model Status", footer: "~600 MB download via uv. Stored in HuggingFace cache.") {
+                SettingsRow(icon: "arrow.down.circle", title: "Parakeet model not installed", subtitle: "Local transcription requires the Parakeet model.", showDivider: false) {
+                    Button("Set Up") {
+                        Task { await stt.setupAndDownload() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
+
+        case .settingUp:
+            SettingsCard(header: "Model Status") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.7)
+                        Text("Installing parakeet-mlx…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    if !stt.setupLog.isEmpty {
+                        SetupLogView(lines: stt.setupLog)
+                    }
+                }
+                .padding(12)
+            }
+
+        case .downloadingModel:
+            SettingsCard(header: "Model Status") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        ProgressView().scaleEffect(0.7)
+                        Text(stt.setupProgress.isEmpty ? "Downloading model…" : stt.setupProgress)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    if !stt.setupLog.isEmpty {
+                        SetupLogView(lines: stt.setupLog)
+                    }
+                }
+                .padding(12)
+            }
+
+        case .ready:
+            SettingsCard(header: "Model Status") {
+                SettingsRow(icon: "checkmark.circle.fill", title: "Parakeet model ready", showDivider: false) {
+                    EmptyView()
+                }
+            }
+
+        case let .error(msg):
+            SettingsCard(header: "Model Status") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Setup failed")
+                                .font(.subheadline)
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Retry") {
+                            Task { await stt.setupAndDownload() }
+                        }
+                        .controlSize(.small)
+                    }
+                }
+                .padding(12)
+            }
+        }
+    }
+}
+
+// MARK: - Trading Pane
+
+struct TradingPane: View {
+    @AppStorage("kiteApiKey")       private var kiteApiKey       = ""
+    @AppStorage("kiteApiSecret")    private var kiteApiSecret    = ""
+    @AppStorage("kiteAccessToken")  private var kiteAccessToken  = ""
+
+    private var isConnected: Bool { !kiteAccessToken.isEmpty }
+
+    var body: some View {
+        DetailContainer(title: "Trading") {
+            // Status
+            SettingsCard {
+                HStack(spacing: 12) {
+                    Image(systemName: isConnected ? "checkmark.circle.fill" : "building.columns.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(isConnected ? .green : Color.accentColor)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(isConnected ? "Connected" : "Kite (Zerodha)")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text(isConnected ? "Your Kite account is linked." : "Connect your Zerodha account to view portfolio.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    if isConnected {
+                        Button("Logout") {
+                            KiteAuthManager.shared.logout()
+                            kiteAccessToken = ""
+                            kiteApiKey = ""
+                            kiteApiSecret = ""
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .tint(.red)
+                    }
+                }
+                .padding(16)
+            }
+
+            if let msg = KiteAuthManager.shared.authError {
+                SettingsCard {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    .padding(12)
+                }
+            }
+
+            // Credentials
+            SettingsCard(header: "Credentials") {
+                SettingsRow(icon: "key", title: "API Key", showDivider: true) {
+                    HStack(spacing: 6) {
+                        SecureField("kite_api_key_…", text: $kiteApiKey)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 200)
+                        Button {
+                            kiteApiKey = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(kiteApiKey.isEmpty ? 0 : 1)
+                    }
+                }
+
+                SettingsRow(icon: "lock.shield", title: "API Secret", showDivider: true) {
+                    HStack(spacing: 6) {
+                        SecureField("kite_api_secret_…", text: $kiteApiSecret)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 200)
+                        Button {
+                            kiteApiSecret = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(kiteApiSecret.isEmpty ? 0 : 1)
+                    }
+                }
+
+                SettingsRow(icon: "link", title: "Callback URL", subtitle: "Set this redirect URL in your Kite Connect app.", showDivider: false) {
+                    Text("http://localhost:23864/callback")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+
+            // Login
+            if !isConnected {
+                SettingsCard {
+                    HStack {
+                        Spacer()
+                        Button {
+                            KiteAuthManager.shared.beginLogin()
+                        } label: {
+                            if KiteAuthManager.shared.isLoggingIn {
+                                HStack(spacing: 4) {
+                                    ProgressView().scaleEffect(0.6)
+                                    Text("Logging in…")
+                                }
+                            } else {
+                                Text("Login to Kite")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.regular)
+                        .disabled(
+                            kiteApiKey.trimmingCharacters(in: .whitespaces).isEmpty ||
+                            kiteApiSecret.trimmingCharacters(in: .whitespaces).isEmpty ||
+                            KiteAuthManager.shared.isLoggingIn
+                        )
+                        Spacer()
+                    }
+                    .padding(16)
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: kiteAccessToken)
+        .animation(.easeInOut(duration: 0.2), value: KiteAuthManager.shared.isLoggingIn)
+    }
+}
+
+// MARK: - System Pane
+
+struct SystemPane: View {
+    @State private var accessibilityGranted = false
+    @State private var startAtLogin         = (SMAppService.mainApp.status == .enabled)
+    @State private var loginItemError: String? = nil
+
+    var body: some View {
+        DetailContainer(title: "System") {
+            SettingsCard(header: "Launch") {
+                SettingsRow(icon: "power", title: "Start at Login", showDivider: false) {
+                    Toggle("", isOn: $startAtLogin)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .onChange(of: startAtLogin) { _, enabled in
+                            applyLoginItem(enabled)
+                        }
+                }
+
+                if let err = loginItemError {
+                    HStack {
+                        Spacer()
+                        Text(err)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
+            }
+
+            SettingsCard(header: "Permissions", footer: "Required to detect keyboard shortcuts and paste fixed text.") {
+                SettingsRow(
+                    icon: accessibilityGranted ? "checkmark.shield.fill" : "xmark.shield.fill",
+                    title: "Accessibility Access",
+                    subtitle: accessibilityGranted ? "Poop can control your Mac." : "Poop needs permission to automate your Mac.",
+                    showDivider: false
+                ) {
+                    if !accessibilityGranted {
+                        Button("Open System Settings") {
+                            AccessibilityManager.shared.requestPermission()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: loginItemError)
+        .onAppear {
+            refreshAccessibility()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshAccessibility()
+        }
+    }
+
+    private func applyLoginItem(_ enable: Bool) {
+        do {
+            if enable {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            loginItemError = nil
+        } catch {
+            startAtLogin = !enable
+            loginItemError = "Could not \(enable ? "enable" : "disable") start at login: \(error.localizedDescription)"
         }
     }
 
@@ -501,7 +872,7 @@ struct ProviderPill: View {
     }
 }
 
-// MARK: - Hotkey Recorder Button (grammar fix — key + modifiers only)
+// MARK: - Hotkey Recorder Button
 
 struct HotkeyRecorderButton: View {
     @Binding var isRecording: Bool
@@ -516,6 +887,7 @@ struct HotkeyRecorderButton: View {
         } label: {
             Text(isRecording ? "Press shortcut…" : displayString)
                 .monospacedDigit()
+                .font(.system(size: 13, weight: .medium))
                 .frame(minWidth: 100, alignment: .center)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
@@ -553,7 +925,6 @@ struct HotkeyRecorderButton: View {
 
 // MARK: - Setup Log View
 
-/// Scrollable monospaced log box shown during STT install / model download.
 struct SetupLogView: View {
     let lines: [String]
 
@@ -580,7 +951,6 @@ struct SetupLogView: View {
                     .strokeBorder(Color(NSColor.separatorColor), lineWidth: 1)
             )
             .onChange(of: lines.count) { _, _ in
-                // Auto-scroll to the bottom as new lines arrive
                 if let last = lines.indices.last {
                     withAnimation(.easeOut(duration: 0.1)) {
                         proxy.scrollTo(last, anchor: .bottom)

@@ -34,6 +34,15 @@ class AppState {
         }
     }
 
+    // MARK: - Kite Portfolio State
+
+    var kiteHoldings: [KiteHolding] = []
+    var kiteMFHoldings: [KiteMFHolding] = []
+    var kitePositions: [KitePosition] = []
+    var kiteIsLoading = false
+    var kiteIsRefreshing = false
+    var kiteLastUpdated: Date?
+
     // MARK: - Voice Dictation State
 
     /// True while the microphone is actively recording.

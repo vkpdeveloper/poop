@@ -26,4 +26,7 @@ extension Logger {
 
     /// Speech-to-text service (Python subprocess, model)
     static let stt         = Logger(subsystem: subsystem, category: "STT")
+
+    /// Kite (Zerodha) API calls + auth
+    static let kite        = Logger(subsystem: subsystem, category: "Kite")
 }

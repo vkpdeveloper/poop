@@ -8,17 +8,19 @@ struct PoopApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        // Menu bar icon + dropdown — this is the entire visible UI of the app.
+        // Menu bar icon + dropdown
         MenuBarExtra {
             MenuContentView()
         } label: {
             MenuBarLabel()
         }
+        .menuBarExtraStyle(.window)
 
         // Settings window, opened via ⌘, or the menu
         Settings {
             SettingsView()
         }
+        .windowResizability(.contentSize)
     }
 }
 
@@ -45,7 +47,7 @@ struct MenuBarLabel: View {
                 blinkOpacity = 1.0
                 withAnimation(
                     .easeInOut(duration: 0.5)
-                    .repeatForever(autoreverses: true)
+                        .repeatForever(autoreverses: true)
                 ) {
                     blinkOpacity = 0.15
                 }
@@ -73,7 +75,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         WaveformPanelManager.shared.setup()
         // Check if the STT environment is already configured
         SpeechToTextService.shared.checkReadiness()
+        // Restore any saved Kite session
+        KiteAuthManager.shared.restoreSession()
         setupHotkey()
+        // Style settings windows for a modern look
+        styleSettingsWindows()
     }
 
     private func setupHotkey() {
@@ -98,5 +104,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Logger.app.info("Poop terminating — tearing down hotkey")
         HotkeyManager.shared.teardown()
         accessibilityTimer?.invalidate()
+    }
+
+    // MARK: - Window Styling
+
+    private func styleSettingsWindows() {
+        // Observe new windows to style any Settings windows
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidBecomeKey),
+            name: NSWindow.didBecomeKeyNotification,
+            object: nil
+        )
+    }
+
+    @objc private func windowDidBecomeKey(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        // Style settings-like windows (exclude panels like waveform)
+        if window.className.contains("Settings") || window.title.isEmpty {
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.styleMask.insert(.fullSizeContentView)
+            window.styleMask.remove(.resizable)
+            window.isMovableByWindowBackground = true
+        }
     }
 }
